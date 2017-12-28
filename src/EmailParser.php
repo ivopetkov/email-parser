@@ -28,49 +28,50 @@ class EmailParser
         $result['deliveryDate'] = strtotime($this->getHeaderValue($headers, 'Delivery-date'));
         $result['date'] = strtotime($this->getHeaderValue($headers, 'Date'));
         $result['subject'] = $this->decodeMIMEEncodedText($this->getHeaderValue($headers, 'Subject'));
-        $result['to'] = $this->parseEmailAdress($this->getHeaderValue($headers, 'To'));
-        $result['from'] = $this->parseEmailAdress($this->getHeaderValue($headers, 'From'));
-        $result['replyTo'] = $this->parseEmailAdress($this->getHeaderValue($headers, 'Reply-To'));
-
-        $result['text'] = '';
-        $result['html'] = '';
+        $result['to'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'To'));
+        $result['from'] = $this->parseEmailAddress($this->getHeaderValue($headers, 'From'));
+        $result['replyTo'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Reply-To'));
+        $result['cc'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Cc'));
+        $result['bcc'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Bcc'));
+        $result['content'] = [];
         $result['attachments'] = [];
-        $inlineAttachments = [];
+        $result['embeds'] = [];
+        $result['headers'] = [];
+        foreach ($headers as $header) {
+            $result['headers'][] = ['name' => $header[0], 'value' => $header[1]];
+        }
 
         $bodyParts = $this->getBodyParts($email);
         foreach ($bodyParts as $bodyPart) {
+            $contentDisposition = strtolower($this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition')[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
-            if ($contentTypeData[0] === 'text/plain') {
-                $result['text'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
-            } elseif ($contentTypeData[0] === 'text/html') {
-                $result['html'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
-            } elseif ($contentTypeData[0] === '') {
-                if (strlen($result['text']) === 0) {
-                    $result['text'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
-                }
-            } else {
+            if ($contentDisposition === 'inline' || $contentDisposition === 'attachment') {
                 $attachmentData = [];
-                $attachmentData['contentType'] = $contentTypeData[0];
-                $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : '';
-                $attachmentData['id'] = trim($this->getHeaderValue($bodyPart[0], 'Content-ID'), '<>');
-                $attachmentData['base64Content'] = base64_encode($this->decodeBodyPart($bodyPart[0], $bodyPart[1]));
-                $contentDisposition = strtolower($this->getHeaderValue($bodyPart[0], 'Content-Disposition'));
+                $attachmentData['mimeType'] = strlen($contentTypeData[0]) > 0 ? $contentTypeData[0] : null;
+                $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
                 if ($contentDisposition === 'inline') {
-                    $inlineAttachments[] = $attachmentData;
-                } else {
-                    $result['attachments'][] = $attachmentData;
+                    $id = trim($this->getHeaderValue($bodyPart[0], 'Content-ID'), '<>');
+                    $attachmentData['id'] = strlen($id) > 0 ? $id : null;
                 }
+                $attachmentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
+                $result[$contentDisposition === 'inline' ? 'embeds' : 'attachments'][] = $attachmentData;
+            } else {
+                $contentData = [];
+                $contentData['mimeType'] = strlen($contentTypeData[0]) > 0 ? $contentTypeData[0] : null;
+                $contentData['encoding'] = isset($contentTypeData[1]['charset']) ? $contentTypeData[1]['charset'] : null;
+                $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
+                $result['content'][] = $contentData;
             }
         }
-        if (!empty($inlineAttachments) && strlen($result['html']) > 0) {
-            foreach ($inlineAttachments as $inlineAttachment) {
-                if (strlen($inlineAttachment['id']) > 0 && strlen($inlineAttachment['contentType']) > 0) {
-                    if (strpos($result['html'], 'cid:' . $inlineAttachment['id'])) {
-                        $result['html'] = str_replace('cid:' . $inlineAttachment['id'], 'data:' . $inlineAttachment['contentType'] . ';base64,' . $inlineAttachment['base64Content'], $result['html']);
-                    }
-                }
-            }
-        }
+//        if (!empty($inlineAttachments) && strlen($result['html']) > 0) {
+//            foreach ($inlineAttachments as $inlineAttachment) {
+//                if (strlen($inlineAttachment['id']) > 0 && strlen($inlineAttachment['contentType']) > 0) {
+//                    if (strpos($result['html'], 'cid:' . $inlineAttachment['id'])) {
+//                        $result['html'] = str_replace('cid:' . $inlineAttachment['id'], 'data:' . $inlineAttachment['contentType'] . ';base64,' . $inlineAttachment['base64Content'], $result['html']);
+//                    }
+//                }
+//            }
+//        }
 
         return $result;
     }
@@ -128,7 +129,7 @@ class EmailParser
     {
         $name = strtolower($name);
         foreach ($headers as $header) {
-            if (strtolower($header[0]) == $name) {
+            if (strtolower($header[0]) === $name) {
                 return $header[1];
             }
         }
@@ -145,7 +146,7 @@ class EmailParser
     {
         $name = strtolower($name);
         foreach ($headers as $header) {
-            if (strtolower($header[0]) == $name) {
+            if (strtolower($header[0]) === $name) {
                 $parts = explode(';', trim($header[1]));
                 $value = trim($parts[0]);
                 $options = [];
@@ -172,14 +173,32 @@ class EmailParser
      * @param string $address
      * @return array
      */
-    private function parseEmailAdress(string $address): array
+    private function parseEmailAddress(string $address): array
     {
         $matches = [];
         preg_match("/(.*)\<(.*)\>/", $address, $matches);
         if (sizeof($matches) === 3) {
-            return [$matches[2], $this->decodeMIMEEncodedText(trim(trim(trim($matches[1]), '"\'')))];
+            return ['email' => $matches[2], 'name' => $this->decodeMIMEEncodedText(trim(trim(trim($matches[1]), '"\'')))];
         }
-        return [$address, ''];
+        return ['email' => $address, 'name' => ''];
+    }
+
+    /**
+     * 
+     * @param string $addresses
+     * @return array
+     */
+    private function parseEmailAddresses(string $addresses): array
+    {
+        $result = [];
+        $addresses = explode(',', $addresses);
+        foreach ($addresses as $address) {
+            $address = trim($address);
+            if (strlen($address) > 0) {
+                $result[] = $this->parseEmailAddress($address);
+            }
+        }
+        return $result;
     }
 
     /**
