@@ -26,6 +26,9 @@ class EmailParser
         $parts = explode("\r\n\r\n", $email, 2);
         $headers = $this->parseHeaders($parts[0]);
         $result['deliveryDate'] = strtotime($this->getHeaderValue($headers, 'Delivery-date'));
+        $result['returnPath'] = $this->parseEmailAddress($this->getHeaderValue($headers, 'Return-path'))['email'];
+        $priority = substr($this->getHeaderValue($headers, 'X-Priority'), 0, 1);
+        $result['priority'] = strlen($priority) > 0 ? (int) $priority : null;
         $result['date'] = strtotime($this->getHeaderValue($headers, 'Date'));
         $result['subject'] = $this->decodeMIMEEncodedText($this->getHeaderValue($headers, 'Subject'));
         $result['to'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'To'));
