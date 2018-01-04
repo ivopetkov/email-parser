@@ -22,6 +22,7 @@ class EmailParser
      */
     public function parse(string $email): array
     {
+
         $result = [];
         $parts = explode("\r\n\r\n", $email, 2);
         $headers = $this->parseHeaders($parts[0]);
@@ -48,7 +49,7 @@ class EmailParser
         foreach ($bodyParts as $bodyPart) {
             $contentDisposition = strtolower($this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition')[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
-            if ($contentDisposition === 'inline' || $contentDisposition === 'attachment') {
+            if ($bodyPart[2] === 1 && ($contentDisposition === 'inline' || $contentDisposition === 'attachment')) {
                 $attachmentData = [];
                 $attachmentData['mimeType'] = strlen($contentTypeData[0]) > 0 ? $contentTypeData[0] : null;
                 $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
@@ -89,7 +90,9 @@ class EmailParser
         $result = '';
         $elements = imap_mime_header_decode($text);
         for ($i = 0; $i < count($elements); $i++) {
-            $result .= $elements[$i]->text;
+            $charset = $elements[$i]->charset;
+            $text = $elements[$i]->text;
+            $result .= (strlen($charset) > 0 && $charset !== 'default') ? mb_convert_encoding($text, 'UTF-8', $charset) : $text;
         }
         return $result;
     }
@@ -210,7 +213,7 @@ class EmailParser
      * @param string $parentContentType
      * @return array
      */
-    private function getBodyParts(string $email, string $parentContentType = null): array
+    private function getBodyParts(string $email, string $parentContentType = null, $level = 0): array
     {
         if ($parentContentType === null || $parentContentType === 'multipart/alternative' || $parentContentType === 'multipart/related' || $parentContentType === 'multipart/mixed' || $parentContentType === 'multipart/signed') {
             // First 2 lines separate the headers from the body
@@ -245,12 +248,12 @@ class EmailParser
                 $bodyParts = array_map('trim', $bodyParts);
                 $temp = [];
                 foreach ($bodyParts as $bodyPart) {
-                    $childBodyParts = $this->getBodyParts($bodyPart, $contentType);
+                    $childBodyParts = $this->getBodyParts($bodyPart, $contentType, 1);
                     $temp = array_merge($temp, $childBodyParts);
                 }
                 $bodyParts = $temp;
             } else {
-                $bodyParts = [[$headers, trim($body)]];
+                $bodyParts = [[$headers, trim($body), $level]];
             }
             return $bodyParts;
         }
