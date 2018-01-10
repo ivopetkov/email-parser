@@ -184,9 +184,9 @@ class EmailParser
         $matches = [];
         preg_match("/(.*)\<(.*)\>/", $address, $matches);
         if (sizeof($matches) === 3) {
-            return ['email' => trim($matches[2]), 'name' => trim($this->decodeMIMEEncodedText(trim(trim(trim($matches[1]), '"\''))))];
+            return ['email' => strtolower(trim($matches[2])), 'name' => trim($this->decodeMIMEEncodedText(trim(trim(trim($matches[1]), '"\''))))];
         }
-        return ['email' => trim($address), 'name' => ''];
+        return ['email' => strtolower(trim($address)), 'name' => ''];
     }
 
     /**
