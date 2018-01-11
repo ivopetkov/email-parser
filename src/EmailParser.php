@@ -49,9 +49,10 @@ class EmailParser
         foreach ($bodyParts as $bodyPart) {
             $contentDisposition = strtolower($this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition')[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
+            $mimeType = strlen($contentTypeData[0]) > 0 ? strtolower($contentTypeData[0]) : null;
             if ($bodyPart[2] === 1 && ($contentDisposition === 'inline' || $contentDisposition === 'attachment')) {
                 $attachmentData = [];
-                $attachmentData['mimeType'] = strlen($contentTypeData[0]) > 0 ? $contentTypeData[0] : null;
+                $attachmentData['mimeType'] = $mimeType;
                 $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
                 if ($contentDisposition === 'inline') {
                     $id = trim($this->getHeaderValue($bodyPart[0], 'Content-ID'), '<>');
@@ -61,8 +62,8 @@ class EmailParser
                 $result[$contentDisposition === 'inline' ? 'embeds' : 'attachments'][] = $attachmentData;
             } else {
                 $contentData = [];
-                $contentData['mimeType'] = strlen($contentTypeData[0]) > 0 ? $contentTypeData[0] : null;
-                $contentData['encoding'] = isset($contentTypeData[1]['charset']) ? $contentTypeData[1]['charset'] : null;
+                $contentData['mimeType'] = $mimeType;
+                $contentData['encoding'] = isset($contentTypeData[1]['charset']) ? strtolower(trim($contentTypeData[1]['charset'])) : null;
                 $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
                 $result['content'][] = $contentData;
             }
@@ -215,7 +216,7 @@ class EmailParser
      */
     private function getBodyParts(string $email, string $parentContentType = null, $level = 0): array
     {
-        if ($parentContentType === null || $parentContentType === 'multipart/alternative' || $parentContentType === 'multipart/related' || $parentContentType === 'multipart/mixed' || $parentContentType === 'multipart/signed') {
+        if ($parentContentType === null || $parentContentType === 'multipart/alternative' || $parentContentType === 'multipart/related' || $parentContentType === 'multipart/mixed' || $parentContentType === 'multipart/signed' || $parentContentType === 'multipart/report') {
             // First 2 lines separate the headers from the body
             $parts = explode("\r\n\r\n", $email, 2);
             $headers = $this->parseHeaders(trim($parts[0]));
