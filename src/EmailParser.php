@@ -47,10 +47,14 @@ class EmailParser
 
         $bodyParts = $this->getBodyParts($email);
         foreach ($bodyParts as $bodyPart) {
-            $contentDisposition = strtolower($this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition')[0]);
+            $contentDispositionData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition');
+            $contentDisposition = strtolower($contentDispositionData[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
             $mimeType = strlen($contentTypeData[0]) > 0 ? strtolower($contentTypeData[0]) : null;
             if ($bodyPart[2] === 1 && ($contentDisposition === 'inline' || $contentDisposition === 'attachment')) {
+                if (isset($contentDispositionData[1]['filename'])) {
+                    $contentDisposition = 'attachment';
+                }
                 $attachmentData = [];
                 $attachmentData['mimeType'] = $mimeType;
                 $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
