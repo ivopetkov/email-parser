@@ -9,7 +9,7 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-class EmailParserTestCase extends PHPUnit_Framework_TestCase
+class EmailParserTestCase extends PHPUnit\Framework\TestCase
 {
-    
+
 }

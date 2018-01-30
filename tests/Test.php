@@ -59,7 +59,22 @@ Content-Type: text/html; charset="UTF-8"
 
 --001a1137b910cdc17f405613f8f2b--';
         $result = $parser->parse($email);
-        $this->assertTrue($result['subject'] === 'Example email');
+        $this->assertSame('Example email', $result['subject']);
+        $this->assertSame('', $result['returnPath']);
+        $this->assertNull($result['priority']);
+        $this->assertFalse($result['deliveryDate']);
+        $this->assertSame(1514300508, $result['date']);
+        $this->assertSame('recipient@example.com', $result['to']['email']);
+        $this->assertSame('recipient', $result['to']['name']);
+        $this->assertSame('sender@example.com', $result['from']['email']);
+        $this->assertSame('sender', $result['from']['name']);
+        $this->assertSame('sender@example.com', $result['replyTo']['email']);
+        $this->assertSame('sender', $result['replyTo']['name']);
+        $this->assertSame('sender@example.com', $result['sender']['email']);
+        $this->assertSame('sender', $result['sender']['name']);
+        $this->assertSame('', $result['cc']['email']);
+        $this->assertSame('', $result['cc']['name']);
+        $this->assertSame('', $result['bcc']['email']);
+        $this->assertSame('', $result['bcc']['name']);
     }
-
 }
