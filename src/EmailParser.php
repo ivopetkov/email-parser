@@ -52,10 +52,6 @@ class EmailParser
             $contentDispositionData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition');
             $contentDisposition = strtolower($contentDispositionData[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
-            $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
-            if ($charset === null) {
-                $charset = $defaultCharset;
-            }
             $mimeType = strlen($contentTypeData[0]) > 0 ? strtolower($contentTypeData[0]) : null;
             if ($mimeType === null && $bodyPart[2] === 0) {
                 $mimeType = 'text/plain';
@@ -71,10 +67,14 @@ class EmailParser
                 $attachmentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
                 $result[$contentDisposition === 'inline' ? 'embeds' : 'attachments'][] = $attachmentData;
             } else {
+                $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
+                if ($charset === null) {
+                    $charset = $defaultCharset;
+                }
                 $contentData = [];
                 $contentData['mimeType'] = $mimeType;
                 $contentData['encoding'] = $charset;
-                $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1], $contentData['encoding']);
+                $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
                 $result['content'][] = $contentData;
             }
         }
@@ -103,7 +103,7 @@ class EmailParser
         for ($i = 0; $i < count($elements); $i++) {
             $charset = $elements[$i]->charset;
             $text = $elements[$i]->text;
-            $result .= (strlen($charset) > 0 && $charset !== 'default') ? $this->convertEncodingToUTF8($text, $charset) : $text;
+            $result .= (strlen($charset) > 0 && $charset !== 'default') ? $this->convertEncoding($text, 'utf-8', $charset) : $text;
         }
         return $result;
     }
@@ -276,9 +276,8 @@ class EmailParser
      * @param string $body
      * @return string
      */
-    private function decodeBodyPart(array $headers, string $body, string $defaultCharset = null): string
+    private function decodeBodyPart(array $headers, string $body): string
     {
-        $contentTypeData = $this->getHeaderValueAndOptions($headers, 'Content-Type');
         $contentTransferEncoding = $this->getHeaderValue($headers, 'Content-Transfer-Encoding');
         if ($contentTransferEncoding === 'base64') {
             $body = base64_decode(preg_replace('/((\r?\n)*)/', '', $body));
@@ -289,17 +288,12 @@ class EmailParser
         } elseif ($contentTransferEncoding === '8bit') {
             $body = quoted_printable_decode(imap_8bit($body));
         }
-
-        $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : $defaultCharset;
-        $charset = strtolower($charset);
-        $body = $this->convertEncodingToUTF8($body, $charset);
-
         return $body;
     }
 
-    private function convertEncodingToUTF8(string $text, string $encoding)
+    public function convertEncoding(string $text, string $toEncoding, string $fromEncoding)
     {
-        if (strlen($encoding) > 0 && array_search($encoding, ['utf-8', 'utf_8', 'u8', 'utf', 'utf8']) === false) {
+        if (strlen($fromEncoding) > 0) {
             $encodingAliases = [
                 'ascii' => ['646', 'us-ascii'],
                 'big5' => ['big5-tw', 'csbig5'],
@@ -380,12 +374,21 @@ class EmailParser
                 'utf_7' => ['u7'],
                 'utf_8' => ['u8', 'utf', 'utf8']
             ];
-            $encodingsToCheck = array_merge([$encoding], isset($encodingAliases[$encoding]) ? $encodingAliases[$encoding] : []);
-            $encodings = mb_list_encodings();
-            foreach ($encodings as $encoding) {
-                if (array_search(strtolower($encoding), $encodingsToCheck) !== false) {
-                    return mb_convert_encoding($text, 'utf-8', $encoding);
+            $supportedEncodings = mb_list_encodings();
+            $getEncoding = function($encoding) use ($supportedEncodings, $encodingAliases) {
+                $encodings = array_merge([$encoding], isset($encodingAliases[$encoding]) ? $encodingAliases[$encoding] : []);
+                foreach ($supportedEncodings as $supportedEncoding) {
+                    if (array_search(strtolower($supportedEncoding), $encodings) !== false) {
+                        return $supportedEncoding;
+                    }
                 }
+
+                return null;
+            };
+            $toEncoding = $getEncoding($toEncoding);
+            $fromEncoding = $getEncoding($fromEncoding);
+            if ($toEncoding !== null && $fromEncoding !== null && $toEncoding !== $fromEncoding) {
+                return mb_convert_encoding($text, $toEncoding, $fromEncoding);
             }
         }
         return $text;
