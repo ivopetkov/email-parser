@@ -44,12 +44,18 @@ class EmailParser
         foreach ($headers as $header) {
             $result['headers'][] = ['name' => $header[0], 'value' => $header[1]];
         }
+        $contentTypeData = $this->getHeaderValueAndOptions($headers, 'Content-Type');
+        $defaultCharset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
 
         $bodyParts = $this->getBodyParts($email);
         foreach ($bodyParts as $bodyPart) {
             $contentDispositionData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Disposition');
             $contentDisposition = strtolower($contentDispositionData[0]);
             $contentTypeData = $this->getHeaderValueAndOptions($bodyPart[0], 'Content-Type');
+            $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
+            if ($charset === null) {
+                $charset = $defaultCharset;
+            }
             $mimeType = strlen($contentTypeData[0]) > 0 ? strtolower($contentTypeData[0]) : null;
             if ($mimeType === null && $bodyPart[2] === 0) {
                 $mimeType = 'text/plain';
@@ -67,8 +73,8 @@ class EmailParser
             } else {
                 $contentData = [];
                 $contentData['mimeType'] = $mimeType;
-                $contentData['encoding'] = isset($contentTypeData[1]['charset']) ? strtolower(trim($contentTypeData[1]['charset'])) : null;
-                $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
+                $contentData['encoding'] = $charset;
+                $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1], $contentData['encoding']);
                 $result['content'][] = $contentData;
             }
         }
@@ -97,7 +103,7 @@ class EmailParser
         for ($i = 0; $i < count($elements); $i++) {
             $charset = $elements[$i]->charset;
             $text = $elements[$i]->text;
-            $result .= (strlen($charset) > 0 && $charset !== 'default') ? mb_convert_encoding($text, 'UTF-8', $charset) : $text;
+            $result .= (strlen($charset) > 0 && $charset !== 'default') ? $this->convertEncodingToUTF8($text, $charset) : $text;
         }
         return $result;
     }
@@ -270,36 +276,119 @@ class EmailParser
      * @param string $body
      * @return string
      */
-    private function decodeBodyPart(array $headers, string $body): string
+    private function decodeBodyPart(array $headers, string $body, string $defaultCharset = null): string
     {
         $contentTypeData = $this->getHeaderValueAndOptions($headers, 'Content-Type');
-
         $contentTransferEncoding = $this->getHeaderValue($headers, 'Content-Transfer-Encoding');
         if ($contentTransferEncoding === 'base64') {
             $body = base64_decode(preg_replace('/((\r?\n)*)/', '', $body));
         } elseif ($contentTransferEncoding === 'quoted-printable') {
             $body = quoted_printable_decode($body);
         } elseif ($contentTransferEncoding === '7bit') {
-            // gurmi
-            //$body = mb_convert_encoding(imap_utf7_decode($body), 'UTF-8', 'ISO-8859-1');
+            
+        } elseif ($contentTransferEncoding === '8bit') {
+            $body = quoted_printable_decode(imap_8bit($body));
         }
 
-        if (isset($contentTypeData[1]['charset']) && strtolower($contentTypeData[1]['charset']) !== 'utf-8') {
-            $charset = strtolower($contentTypeData[1]['charset']);
-            $encodings = mb_list_encodings();
-            $found = false;
-            foreach ($encodings as $encoding) {
-                if (strtolower($encoding) === $charset) {
-                    $found = true;
-                    break;
-                }
-            }
-            if ($found) {
-                $body = mb_convert_encoding($body, 'UTF-8', $charset);
-            }
-        }
+        $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : $defaultCharset;
+        $charset = strtolower($charset);
+        $body = $this->convertEncodingToUTF8($body, $charset);
 
         return $body;
+    }
+
+    private function convertEncodingToUTF8(string $text, string $encoding)
+    {
+        if (strlen($encoding) > 0 && array_search($encoding, ['utf-8', 'utf_8', 'u8', 'utf', 'utf8']) === false) {
+            $encodingAliases = [
+                'ascii' => ['646', 'us-ascii'],
+                'big5' => ['big5-tw', 'csbig5'],
+                'big5hkscs' => ['big5-hkscs', 'hkscs'],
+                'cp037' => ['ibm037', 'ibm039'],
+                'cp424' => ['ebcdic-cp-he', 'ibm424'],
+                'cp437' => ['437', 'ibm437'],
+                'cp500' => ['ebcdic-cp-be', 'ebcdic-cp-ch', 'ibm500'],
+                'cp775' => ['ibm775'],
+                'cp850' => ['850', 'ibm850'],
+                'cp852' => ['852', 'ibm852'],
+                'cp855' => ['855', 'ibm855'],
+                'cp857' => ['857', 'ibm857'],
+                'cp860' => ['860', 'ibm860'],
+                'cp861' => ['861', 'cp-is', 'ibm861'],
+                'cp862' => ['862', 'ibm862'],
+                'cp863' => ['863', 'ibm863'],
+                'cp864' => ['ibm864'],
+                'cp865' => ['865', 'ibm865'],
+                'cp866' => ['866', 'ibm866'],
+                'cp869' => ['869', 'cp-gr', 'ibm869'],
+                'cp932' => ['932', 'ms932', 'mskanji', 'ms-kanji'],
+                'cp949' => ['949', 'ms949', 'uhc'],
+                'cp950' => ['950', 'ms950'],
+                'cp1026' => ['ibm1026'],
+                'cp1140' => ['ibm1140'],
+                'cp1250' => ['windows-1250'],
+                'cp1251' => ['windows-1251'],
+                'cp1252' => ['windows-1252'],
+                'cp1253' => ['windows-1253'],
+                'cp1254' => ['windows-1254'],
+                'cp1255' => ['windows-1255'],
+                'cp1256' => ['windows1256'],
+                'cp1257' => ['windows-1257'],
+                'cp1258' => ['windows-1258'],
+                'euc_jp' => ['eucjp', 'ujis', 'u-jis'],
+                'euc_jis_2004' => ['jisx0213', 'eucjis2004'],
+                'euc_jisx0213' => ['eucjisx0213'],
+                'euc_kr' => ['euckr', 'korean', 'ksc5601', 'ks_c-5601', 'ks_c-5601-1987', 'ksx1001', 'ks_x-1001'],
+                'gb2312' => ['chinese', 'csiso58gb231280', 'euc-cn', 'euccn', 'eucgb2312-cn', 'gb2312-1980', 'gb2312-80', 'iso-ir-58'],
+                'gbk' => ['936', 'cp936', 'ms936'],
+                'gb18030' => ['gb18030-2000'],
+                'hz' => ['hzgb', 'hz-gb', 'hz-gb-2312'],
+                'iso2022_jp' => ['csiso2022jp', 'iso2022jp', 'iso-2022-jp'],
+                'iso2022_jp_1' => ['iso2022jp-1', 'iso-2022-jp-1'],
+                'iso2022_jp_2' => ['iso2022jp-2', 'iso-2022-jp-2'],
+                'iso2022_jp_2004' => ['iso2022jp-2004', 'iso-2022-jp-2004'],
+                'iso2022_jp_3' => ['iso2022jp-3', 'iso-2022-jp-3'],
+                'iso2022_jp_ext' => ['iso2022jp-ext', 'iso-2022-jp-ext'],
+                'iso2022_kr' => ['csiso2022kr', 'iso2022kr', 'iso-2022-kr'],
+                'latin_1' => ['iso-8859-1', 'iso8859-1', '8859', 'cp819', 'latin', 'latin1', 'l1'],
+                'iso8859_2' => ['iso-8859-2', 'latin2', 'l2'],
+                'iso8859_3' => ['iso-8859-3', 'latin3', 'l3'],
+                'iso8859_4' => ['iso-8859-4', 'latin4', 'l4'],
+                'iso8859_5' => ['iso-8859-5', 'cyrillic'],
+                'iso8859_6' => ['iso-8859-6', 'arabic'],
+                'iso8859_7' => ['iso-8859-7', 'greek', 'greek8'],
+                'iso8859_8' => ['iso-8859-8', 'hebrew'],
+                'iso8859_9' => ['iso-8859-9', 'latin5', 'l5'],
+                'iso8859_10' => ['iso-8859-10', 'latin6', 'l6'],
+                'iso8859_13' => ['iso-8859-13'],
+                'iso8859_14' => ['iso-8859-14', 'latin8', 'l8'],
+                'iso8859_15' => ['iso-8859-15'],
+                'johab' => ['cp1361', 'ms1361'],
+                'mac_cyrillic' => ['maccyrillic'],
+                'mac_greek' => ['macgreek'],
+                'mac_iceland' => ['maciceland'],
+                'mac_latin2' => ['maclatin2', 'maccentraleurope'],
+                'mac_roman' => ['macroman'],
+                'mac_turkish' => ['macturkish'],
+                'ptcp154' => ['csptcp154', 'pt154', 'cp154', 'cyrillic-asian'],
+                'shift_jis' => ['csshiftjis', 'shiftjis', 'sjis', 's_jis'],
+                'shift_jis_2004' => ['shiftjis2004', 'sjis_2004', 'sjis2004'],
+                'shift_jisx0213' => ['shiftjisx0213', 'sjisx0213', 's_jisx0213'],
+                'utf_16' => ['u16', 'utf16'],
+                'utf_16_be' => ['utf-16be'],
+                'utf_16_le' => ['utf-16le'],
+                'utf_7' => ['u7'],
+                'utf_8' => ['u8', 'utf', 'utf8']
+            ];
+            $encodingsToCheck = array_merge([$encoding], isset($encodingAliases[$encoding]) ? $encodingAliases[$encoding] : []);
+            $encodings = mb_list_encodings();
+            foreach ($encodings as $encoding) {
+                if (array_search(strtolower($encoding), $encodingsToCheck) !== false) {
+                    return mb_convert_encoding($text, 'utf-8', $encoding);
+                }
+            }
+        }
+        return $text;
     }
 
 }
