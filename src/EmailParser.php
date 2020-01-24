@@ -171,7 +171,7 @@ class EmailParser
                 if (!empty($parts)) {
                     foreach ($parts as $part) {
                         $part = trim($part);
-                        if (isset($part{0})) {
+                        if (isset($part[0])) {
                             $optionParts = explode('=', $part, 2);
                             if (sizeof($optionParts) === 2) {
                                 $options[strtolower(trim($optionParts[0]))] = trim(trim(trim($optionParts[1]), '"\''));
