@@ -78,15 +78,15 @@ class EmailParser
                 $result['content'][] = $contentData;
             }
         }
-//        if (!empty($inlineAttachments) && strlen($result['html']) > 0) {
-//            foreach ($inlineAttachments as $inlineAttachment) {
-//                if (strlen($inlineAttachment['id']) > 0 && strlen($inlineAttachment['contentType']) > 0) {
-//                    if (strpos($result['html'], 'cid:' . $inlineAttachment['id'])) {
-//                        $result['html'] = str_replace('cid:' . $inlineAttachment['id'], 'data:' . $inlineAttachment['contentType'] . ';base64,' . $inlineAttachment['base64Content'], $result['html']);
-//                    }
-//                }
-//            }
-//        }
+        //        if (!empty($inlineAttachments) && strlen($result['html']) > 0) {
+        //            foreach ($inlineAttachments as $inlineAttachment) {
+        //                if (strlen($inlineAttachment['id']) > 0 && strlen($inlineAttachment['contentType']) > 0) {
+        //                    if (strpos($result['html'], 'cid:' . $inlineAttachment['id'])) {
+        //                        $result['html'] = str_replace('cid:' . $inlineAttachment['id'], 'data:' . $inlineAttachment['contentType'] . ';base64,' . $inlineAttachment['base64Content'], $result['html']);
+        //                    }
+        //                }
+        //            }
+        //        }
 
         return $result;
     }
@@ -284,7 +284,6 @@ class EmailParser
         } elseif ($contentTransferEncoding === 'quoted-printable') {
             $body = quoted_printable_decode($body);
         } elseif ($contentTransferEncoding === '7bit') {
-            
         } elseif ($contentTransferEncoding === '8bit') {
             $body = quoted_printable_decode(imap_8bit($body));
         }
@@ -377,7 +376,7 @@ class EmailParser
                 'utf_8' => ['u8', 'utf', 'utf8']
             ];
             $supportedEncodings = mb_list_encodings();
-            $getEncoding = function($encoding) use ($supportedEncodings, $encodingAliases) {
+            $getEncoding = function ($encoding) use ($supportedEncodings, $encodingAliases) {
                 $encodings = array_merge([$encoding], isset($encodingAliases[$encoding]) ? $encodingAliases[$encoding] : []);
                 foreach ($supportedEncodings as $supportedEncoding) {
                     if (array_search(strtolower($supportedEncoding), $encodings) !== false) {
@@ -395,5 +394,4 @@ class EmailParser
         }
         return $text;
     }
-
 }
