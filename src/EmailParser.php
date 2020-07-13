@@ -26,6 +26,7 @@ class EmailParser
         $result = [];
         $parts = explode("\r\n\r\n", $email, 2);
         $headers = $this->parseHeaders($parts[0]);
+        $result['received'] = $this->parseReceivedHeader($this->getHeaderValue($headers, 'Received'));
         $result['deliveryDate'] = strtotime($this->getHeaderValue($headers, 'Delivery-date'));
         $result['returnPath'] = $this->parseEmailAddress($this->getHeaderValue($headers, 'Return-path'))['email'];
         $priority = substr($this->getHeaderValue($headers, 'X-Priority'), 0, 1);
@@ -213,6 +214,35 @@ class EmailParser
             $address = trim($address);
             if (strlen($address) > 0) {
                 $result[] = $this->parseEmailAddress($address);
+            }
+        }
+        return $result;
+    }
+
+    private function parseReceivedHeader(string $value): array
+    {
+        $parts = explode(';', $value);
+        if (sizeof($parts) === 2) {
+            $value = $parts[0];
+            $date =  $parts[1];
+        }
+        $parts = ['from', 'by', 'with', 'id', 'for'];
+        $splitKey = '$$$';
+        foreach ($parts as $part) {
+            $temp = explode($part, $value, 2);
+            if (sizeof($temp) === 2) {
+                $value = implode($splitKey . $part, $temp);
+            }
+        }
+        $result = [];
+        $parts = explode($splitKey, $value);
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if (strlen($part) > 0) {
+                $parts2 = explode(' ', $part, 2);
+                if (sizeof($parts2) === 2) {
+                    $result[$parts2[0]] = $parts2[1];
+                }
             }
         }
         return $result;
