@@ -241,7 +241,7 @@ class EmailParser
             if (strlen($part) > 0) {
                 $parts2 = explode(' ', $part, 2);
                 if (sizeof($parts2) === 2) {
-                    $result[$parts2[0]] = $parts2[1];
+                    $result[trim($parts2[0])] = trim($parts2[1]);
                 }
             }
         }
