@@ -115,7 +115,7 @@ class EmailParser
      */
     private function parseHeaders(string $headers): array
     {
-        $lines = explode("\r\n", trim($headers));
+        $lines = explode("\n", trim($headers));
         $temp = [];
         foreach ($lines as $line) {
             if (preg_match('/^[a-zA-Z0-9]/', $line) === 1) {
