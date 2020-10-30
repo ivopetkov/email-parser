@@ -18,35 +18,91 @@ class EmailParser
     /**
      * 
      * @param string $email
+     * @param boolean $convertToUTF8
      * @return array
      */
-    public function parse(string $email): array
+    public function parse(string $email, bool $convertToUTF8 = false): array
     {
+
+        $convertEmailAddressToUTF8 = function (array $email): array {
+            foreach ($email as $key => $value) {
+                if ($value !== null) {
+                    $email[$this->convertToUTF8($key)] = $this->convertToUTF8($value);
+                }
+            }
+            return $email;
+        };
+
+        $convertEmailAddressesToUTF8 = function (array $emails) use ($convertEmailAddressToUTF8): array {
+            foreach ($emails as $index => $email) {
+                $emails[$index] = $convertEmailAddressToUTF8($email);
+            };
+            return $emails;
+        };
 
         $result = [];
         $parts = explode("\r\n\r\n", $email, 2);
         $headers = $this->parseHeaders($parts[0]);
         $result['received'] = $this->parseReceivedHeader($this->getHeaderValue($headers, 'Received'));
+        if ($convertToUTF8) {
+            foreach ($result['received'] as $key => $value) {
+                if ($value !== null) {
+                    $result['received'][$this->convertToUTF8($key)] = $this->convertToUTF8($value);
+                }
+            }
+        }
         $result['deliveryDate'] = strtotime($this->getHeaderValue($headers, 'Delivery-date'));
         $result['returnPath'] = $this->parseEmailAddress($this->getHeaderValue($headers, 'Return-path'))['email'];
+        if ($convertToUTF8) {
+            $result['returnPath'] = $this->convertToUTF8($result['returnPath']);
+        }
         $priority = substr($this->getHeaderValue($headers, 'X-Priority'), 0, 1);
         $result['priority'] = strlen($priority) > 0 ? (int) $priority : null;
         $result['date'] = strtotime($this->getHeaderValue($headers, 'Date'));
         $result['subject'] = $this->decodeMIMEEncodedText($this->getHeaderValue($headers, 'Subject'));
+        if ($convertToUTF8 && $result['subject'] !== null) {
+            $result['subject'] = $this->convertToUTF8($result['subject']);
+        }
         $result['to'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'To'));
+        if ($convertToUTF8) {
+            $result['to'] = $convertEmailAddressesToUTF8($result['to']);
+        }
         $result['from'] = $this->parseEmailAddress($this->getHeaderValue($headers, 'From'));
+        if ($convertToUTF8) {
+            $result['from'] = $convertEmailAddressToUTF8($result['from']);
+        }
         $result['replyTo'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Reply-To'));
+        if ($convertToUTF8) {
+            $result['replyTo'] = $convertEmailAddressesToUTF8($result['replyTo']);
+        }
         $result['cc'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Cc'));
+        if ($convertToUTF8) {
+            $result['cc'] = $convertEmailAddressesToUTF8($result['cc']);
+        }
         $result['bcc'] = $this->parseEmailAddresses($this->getHeaderValue($headers, 'Bcc'));
+        if ($convertToUTF8) {
+            $result['bcc'] = $convertEmailAddressesToUTF8($result['bcc']);
+        }
         $result['content'] = [];
         $result['attachments'] = [];
         $result['embeds'] = [];
         $result['headers'] = [];
         foreach ($headers as $header) {
+            if ($convertToUTF8) {
+                if ($header[0] !== null) {
+                    $header[0] = $this->convertToUTF8($header[0]);
+                }
+                if ($header[1] !== null) {
+                    $header[1] = $this->convertToUTF8($header[1]);
+                }
+            }
             $result['headers'][] = ['name' => $header[0], 'value' => $header[1]];
         }
         $contentTypeData = $this->getHeaderValueAndOptions($headers, 'Content-Type');
         $defaultCharset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
+        if ($convertToUTF8 && $defaultCharset !== null) {
+            $defaultCharset = $this->convertToUTF8($defaultCharset);
+        }
 
         $bodyParts = $this->getBodyParts($email);
         foreach ($bodyParts as $bodyPart) {
@@ -57,16 +113,26 @@ class EmailParser
             if ($mimeType === null && $bodyPart[2] === 0) {
                 $mimeType = 'text/plain';
             }
+            if ($convertToUTF8 && $mimeType !== null) {
+                $mimeType = $this->convertToUTF8($mimeType);
+            }
             if ($bodyPart[2] === 1 && ($contentDisposition === 'attachment' || (isset($contentDispositionData[1]['filename']) && strlen($contentDispositionData[1]['filename']) > 0))) {
                 $attachmentData = [];
                 $attachmentData['mimeType'] = $mimeType;
                 $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
+                if ($convertToUTF8 && $attachmentData['name'] !== null) {
+                    $attachmentData['name'] = $this->convertToUTF8($attachmentData['name']);
+                }
                 if ($contentDisposition === 'inline') {
                     $id = trim($this->getHeaderValue($bodyPart[0], 'Content-ID'), '<>');
+                    if ($convertToUTF8) {
+                        $id = $this->convertToUTF8($id);
+                    }
                     $attachmentData['id'] = strlen($id) > 0 ? $id : null;
                 }
                 $attachmentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
-                $result[$contentDisposition === 'inline' ? 'embeds' : 'attachments'][] = $attachmentData;
+                // It must be bug if inline and no id specified
+                $result[$contentDisposition === 'inline' && $attachmentData['id'] !== null ? 'embeds' : 'attachments'][] = $attachmentData;
             } else {
                 $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
                 if ($charset === null) {
@@ -76,6 +142,10 @@ class EmailParser
                 $contentData['mimeType'] = $mimeType;
                 $contentData['encoding'] = $charset;
                 $contentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
+                if ($convertToUTF8) {
+                    $contentData['encoding'] = 'utf-8';
+                    $contentData['content'] = $this->convertEncoding($contentData['content'], 'utf-8', $charset);
+                }
                 $result['content'][] = $contentData;
             }
         }
@@ -320,7 +390,19 @@ class EmailParser
         return $body;
     }
 
-    public function convertEncoding(string $text, string $toEncoding, string $fromEncoding)
+    public function convertToUTF8(string $text)
+    {
+        return $this->convertEncoding($text, 'utf-8');
+    }
+
+    /**
+     * 
+     * @param string $text
+     * @param string $toEncoding
+     * @param string $fromEncoding
+     * @return void
+     */
+    public function convertEncoding(string $text, string $toEncoding, string $fromEncoding = null)
     {
         $toEncoding = strtolower($toEncoding);
         $fromEncoding = strtolower($fromEncoding);
@@ -413,7 +495,6 @@ class EmailParser
                         return $supportedEncoding;
                     }
                 }
-
                 return null;
             };
             $toEncoding = $getEncoding($toEncoding);
@@ -422,6 +503,19 @@ class EmailParser
                 return mb_convert_encoding($text, $toEncoding, $fromEncoding);
             }
         }
-        return $text;
+        if (json_encode($text) !== false) { // test if everything is utf8
+            return $text;
+        }
+
+        $encodingsToTest = array_values(array_merge(['windows-1251', 'iso-8859-1'], mb_list_encodings())); // prefered encodings
+        foreach ($encodingsToTest as $encodingToTest) {
+            $convertedText = @mb_convert_encoding($text, $toEncoding, $encodingToTest);
+            if ($convertedText !== false) {
+                if (preg_match('/[абвгдежзийклмнопрстуфхцчшщъьюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯ]/u', $convertedText) === 1) { // check cyrillic symbols
+                    return $convertedText;
+                }
+            }
+        }
+        return mb_convert_encoding($text, $toEncoding);
     }
 }
