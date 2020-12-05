@@ -283,7 +283,10 @@ class EmailParser
         foreach ($addresses as $address) {
             $address = trim($address);
             if (strlen($address) > 0) {
-                $result[] = $this->parseEmailAddress($address);
+                $value = $this->parseEmailAddress($address);
+                if (strlen($value['email']) > 0) {
+                    $result[] = $value;
+                }
             }
         }
         return $result;
