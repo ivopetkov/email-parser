@@ -512,7 +512,11 @@ class EmailParser
 
         $encodingsToTest = array_values(array_merge(['windows-1251', 'iso-8859-1'], mb_list_encodings())); // prefered encodings
         foreach ($encodingsToTest as $encodingToTest) {
-            $convertedText = @mb_convert_encoding($text, $toEncoding, $encodingToTest);
+            try {
+                $convertedText = @mb_convert_encoding($text, $toEncoding, $encodingToTest);
+            } catch (\Exception $e) {
+                $convertedText = false;
+            }
             if ($convertedText !== false) {
                 if (preg_match('/[абвгдежзийклмнопрстуфхцчшщъьюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯ]/u', $convertedText) === 1) { // check cyrillic symbols
                     return $convertedText;
