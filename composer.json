@@ -14,9 +14,11 @@
         "ext-imap": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "6.*"
+        "phpunit/phpunit": "6.*|7.*|8.*|9.*"
     },
     "autoload": {
-        "files": ["autoload.php"]
+        "files": [
+            "autoload.php"
+        ]
     }
 }
