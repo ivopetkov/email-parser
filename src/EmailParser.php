@@ -408,7 +408,7 @@ class EmailParser
     public function convertEncoding(string $text, string $toEncoding, string $fromEncoding = null)
     {
         $toEncoding = strtolower($toEncoding);
-        $fromEncoding = strtolower($fromEncoding);
+        $fromEncoding = strtolower((string)$fromEncoding);
         if (strlen($fromEncoding) > 0) {
             $encodingAliases = [
                 'ascii' => ['646', 'us-ascii'],
