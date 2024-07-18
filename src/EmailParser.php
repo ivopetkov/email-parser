@@ -116,15 +116,16 @@ class EmailParser
             if ($convertToUTF8 && $mimeType !== null) {
                 $mimeType = $this->convertToUTF8($mimeType);
             }
-            if ($bodyPart[2] === 1 && ($contentDisposition === 'attachment' || (isset($contentDispositionData[1]['filename']) && strlen($contentDispositionData[1]['filename']) > 0))) {
+            $contentID = $this->getHeaderValue($bodyPart[0], 'Content-ID'); // some embed images has no Content-Disposition;
+            if ($bodyPart[2] === 1 && ($contentDisposition === 'attachment' || (isset($contentDispositionData[1]['filename']) && strlen($contentDispositionData[1]['filename']) > 0) || $contentID !== '')) {
                 $attachmentData = [];
                 $attachmentData['mimeType'] = $mimeType;
                 $attachmentData['name'] = isset($contentTypeData[1]['name']) ? $this->decodeMIMEEncodedText($contentTypeData[1]['name']) : null;
                 if ($convertToUTF8 && $attachmentData['name'] !== null) {
                     $attachmentData['name'] = $this->convertToUTF8($attachmentData['name']);
                 }
-                if ($contentDisposition === 'inline') {
-                    $id = trim($this->getHeaderValue($bodyPart[0], 'Content-ID'), '<>');
+                if ($contentID !== '') { // $contentDisposition === 'inline'
+                    $id = trim($contentID, '<>');
                     if ($convertToUTF8) {
                         $id = $this->convertToUTF8($id);
                     }
@@ -132,7 +133,7 @@ class EmailParser
                 }
                 $attachmentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
                 // It must be bug if inline and no id specified
-                $result[$contentDisposition === 'inline' && $attachmentData['id'] !== null ? 'embeds' : 'attachments'][] = $attachmentData;
+                $result[isset($attachmentData['id']) && $attachmentData['id'] !== null ? 'embeds' : 'attachments'][] = $attachmentData; // $contentDisposition === 'inline'
             } else {
                 $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
                 if ($charset === null) {
