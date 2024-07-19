@@ -150,15 +150,6 @@ class EmailParser
                 $result['content'][] = $contentData;
             }
         }
-        //        if (!empty($inlineAttachments) && strlen($result['html']) > 0) {
-        //            foreach ($inlineAttachments as $inlineAttachment) {
-        //                if (strlen($inlineAttachment['id']) > 0 && strlen($inlineAttachment['contentType']) > 0) {
-        //                    if (strpos($result['html'], 'cid:' . $inlineAttachment['id'])) {
-        //                        $result['html'] = str_replace('cid:' . $inlineAttachment['id'], 'data:' . $inlineAttachment['contentType'] . ';base64,' . $inlineAttachment['base64Content'], $result['html']);
-        //                    }
-        //                }
-        //            }
-        //        }
 
         return $result;
     }
@@ -382,7 +373,7 @@ class EmailParser
      */
     private function decodeBodyPart(array $headers, string $body): string
     {
-        $contentTransferEncoding = $this->getHeaderValue($headers, 'Content-Transfer-Encoding');
+        $contentTransferEncoding = strtolower($this->getHeaderValue($headers, 'Content-Transfer-Encoding'));
         if ($contentTransferEncoding === 'base64') {
             $body = base64_decode(preg_replace('/((\r?\n)*)/', '', $body));
         } elseif ($contentTransferEncoding === 'quoted-printable') {
