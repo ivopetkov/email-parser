@@ -124,7 +124,7 @@ class EmailParser
                 if ($convertToUTF8 && $attachmentData['name'] !== null) {
                     $attachmentData['name'] = $this->convertToUTF8($attachmentData['name']);
                 }
-                if ($contentID !== '') { // $contentDisposition === 'inline'
+                if ($contentID !== '') {
                     $id = trim($contentID, '<>');
                     if ($convertToUTF8) {
                         $id = $this->convertToUTF8($id);
@@ -133,7 +133,11 @@ class EmailParser
                 }
                 $attachmentData['content'] = $this->decodeBodyPart($bodyPart[0], $bodyPart[1]);
                 // It must be bug if inline and no id specified
-                $result[isset($attachmentData['id']) && $attachmentData['id'] !== null ? 'embeds' : 'attachments'][] = $attachmentData; // $contentDisposition === 'inline'
+                $isEmbed = false;
+                if ($contentDisposition === 'inline' && isset($attachmentData['id']) && $attachmentData['id'] !== null) {
+                    $isEmbed = true;
+                }
+                $result[$isEmbed ? 'embeds' : 'attachments'][] = $attachmentData;
             } else {
                 $charset = isset($contentTypeData[1]['charset']) && strlen($contentTypeData[1]['charset']) > 0 ? strtolower(trim($contentTypeData[1]['charset'])) : null;
                 if ($charset === null) {
