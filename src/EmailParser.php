@@ -188,8 +188,8 @@ class EmailParser
             if (preg_match('/^[a-zA-Z0-9]/', $line) === 1) {
                 $temp[] = trim($line);
             } else {
-                if (sizeof($temp) > 0) {
-                    $temp[sizeof($temp) - 1] .= ' ' . trim($line);
+                if (count($temp) > 0) {
+                    $temp[count($temp) - 1] .= ' ' . trim($line);
                 } else {
                     $temp[] = trim($line);
                 }
@@ -240,7 +240,7 @@ class EmailParser
                         $part = trim($part);
                         if (isset($part[0])) {
                             $optionParts = explode('=', $part, 2);
-                            if (sizeof($optionParts) === 2) {
+                            if (count($optionParts) === 2) {
                                 $options[strtolower(trim($optionParts[0]))] = trim(trim(trim($optionParts[1]), '"\''));
                             }
                         }
@@ -261,7 +261,7 @@ class EmailParser
     {
         $matches = [];
         preg_match("/(.*)\<(.*)\>/", $address, $matches);
-        if (sizeof($matches) === 3) {
+        if (count($matches) === 3) {
             return ['email' => strtolower(trim($matches[2])), 'name' => trim($this->decodeMIMEEncodedText(trim(trim(trim($matches[1]), '"\''))))];
         }
         return ['email' => strtolower(trim($address)), 'name' => ''];
@@ -291,7 +291,7 @@ class EmailParser
     private function parseReceivedHeader(string $value): array
     {
         $parts = explode(';', $value);
-        if (sizeof($parts) === 2) {
+        if (count($parts) === 2) {
             $value = $parts[0];
             $date =  $parts[1];
         }
@@ -299,7 +299,7 @@ class EmailParser
         $splitKey = '$$$';
         foreach ($parts as $part) {
             $temp = explode($part, $value, 2);
-            if (sizeof($temp) === 2) {
+            if (count($temp) === 2) {
                 $value = implode($splitKey . $part, $temp);
             }
         }
@@ -309,7 +309,7 @@ class EmailParser
             $part = trim($part);
             if (strlen($part) > 0) {
                 $parts2 = explode(' ', $part, 2);
-                if (sizeof($parts2) === 2) {
+                if (count($parts2) === 2) {
                     $result[trim($parts2[0])] = trim($parts2[1]);
                 }
             }
@@ -323,7 +323,7 @@ class EmailParser
      * @param string $parentContentType
      * @return array
      */
-    private function getBodyParts(string $email, string $parentContentType = null, $level = 0): array
+    private function getBodyParts(string $email, ?string $parentContentType = null, $level = 0): array
     {
         if ($parentContentType === null || $parentContentType === 'multipart/alternative' || $parentContentType === 'multipart/related' || $parentContentType === 'multipart/mixed' || $parentContentType === 'multipart/signed' || $parentContentType === 'multipart/report') {
             // First 2 lines separate the headers from the body
@@ -401,7 +401,7 @@ class EmailParser
      * @param string $fromEncoding
      * @return void
      */
-    public function convertEncoding(string $text, string $toEncoding, string $fromEncoding = null)
+    public function convertEncoding(string $text, string $toEncoding, ?string $fromEncoding = null)
     {
         $toEncoding = strtolower($toEncoding);
         $fromEncoding = strtolower((string)$fromEncoding);
